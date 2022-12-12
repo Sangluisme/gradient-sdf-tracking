@@ -1,0 +1,121 @@
+import torch
+import torch.nn as nn
+torch.set_default_dtype(torch.float64)
+
+from sdf_tracker.voxel_grid import *
+from sdf_tracker.sdf import *
+from sdf_tracker.volumetric_grad_sdf import *
+from third.se3 import SE3 as SE3
+
+def check_nan(array):
+    if torch.isnan(array).any():
+        print("there are nan in the array.")
+        return True
+    print("all good.")
+    return False
+
+class RigidPointOptimizer:
+
+    def __init__(
+        self,
+        sdf,
+        pose,
+        num_iterations=50,
+        conv_threshold=1e-4,
+        damping=1.0):
+        
+        self.num_iterations = num_iterations
+        self.conv_threshold = torch.sqrt(torch.Tensor([conv_threshold]))
+        self.conv_threshold_sq = conv_threshold
+        self.damping = damping
+
+        self.sdf = sdf
+        self.pose = SE3(pose)
+
+
+    def optimize(self, depth, K):
+        
+        h, w = depth.shape
+        z = torch.from_numpy(depth.flatten())
+        valid = (z > self.sdf.z_min) & (z <= self.sdf.z_max)
+
+        for iter in range(self.num_iterations):
+            R = self.pose.rotation
+            t = self.pose.translation
+
+
+            # E = 0.0 # energy
+            # g = torch.zeros(6)
+            # H = torch.zeros(6,6)
+
+            u, v = torch.meshgrid(torch.linspace(0,w-1, w), torch.linspace(0, h-1, h))
+            x0 = u.T.flatten()
+            y0 = v.T.flatten()
+
+            x0 = (x0 - K[0,2]) / K[0,0]
+            y0 = (y0 - K[1,2]) / K[1,1]
+
+            points = torch.hstack([(x0*z).unsqueeze(-1), (y0*z).unsqueeze(-1), z.unsqueeze(-1)])
+
+            points = points @ R.T + t
+
+            w0 = self.sdf.weights(points)
+
+            valid_w = w0 > 0
+
+            phi0, grad, valid_d, index = self.sdf.tsdf(points)
+
+            valid = (valid & valid_w & valid_d)
+            # valid = (valid & valid_w)
+            phi0 = torch.where(valid, phi0, torch.Tensor([0.0]))
+            grad = grad * valid.unsqueeze(-1)
+            
+            E = torch.sum(phi0 * phi0)
+
+            grad_xi = torch.zeros(6, points.shape[0])
+
+            grad_xi[:3, :] = grad.T
+            grad_xi[-3:,:] = torch.cross(points.T, grad.T, dim=0)
+
+            g =  grad_xi @ phi0
+            H = grad_xi @ grad_xi.T
+
+            counter = torch.sum(valid)
+
+            E /= counter
+
+            if(counter==0):
+                print("zero points are valid.")
+                return False
+
+
+            xi = self.damping * torch.linalg.solve(H, g)
+
+            #DEBUG:
+            # print("---current xi: {0}\n".format(xi))
+
+            if(torch.linalg.norm(xi)< self.conv_threshold):
+                print('------- convergence after {0} iterations'.format(iter))
+                return True
+
+            self.pose.update_left(self.pose.exp(-xi))
+
+            #debug
+            # print("---- pose: \n {0}".format(self.pose.mat))
+            
+
+
+        return False
+
+
+
+
+
+
+
+
+
+
+
+
+
