@@ -20,28 +20,30 @@ class RigidPointOptimizer:
         self,
         sdf,
         pose,
+        device,
         num_iterations=50,
-        conv_threshold=1e-4,
+        conv_threshold=1e-5,
         damping=1.0):
         
+        self.device = device
         self.num_iterations = num_iterations
         self.conv_threshold = torch.sqrt(torch.Tensor([conv_threshold]))
         self.conv_threshold_sq = conv_threshold
         self.damping = damping
 
         self.sdf = sdf
-        self.pose = SE3(pose)
+        self.pose = SE3(pose, device)
 
 
     def optimize(self, depth, K):
         
         h, w = depth.shape
-        z = torch.from_numpy(depth.flatten())
+        z = torch.from_numpy(depth.flatten()).to(self.device)
         valid = (z > self.sdf.z_min) & (z <= self.sdf.z_max)
 
         for iter in range(self.num_iterations):
-            R = self.pose.rotation
-            t = self.pose.translation
+            R = self.pose.rotation.to(self.device)
+            t = self.pose.translation.to(self.device)
 
 
             # E = 0.0 # energy
@@ -49,8 +51,8 @@ class RigidPointOptimizer:
             # H = torch.zeros(6,6)
 
             u, v = torch.meshgrid(torch.linspace(0,w-1, w), torch.linspace(0, h-1, h))
-            x0 = u.T.flatten()
-            y0 = v.T.flatten()
+            x0 = u.T.flatten().to(self.device)
+            y0 = v.T.flatten().to(self.device)
 
             x0 = (x0 - K[0,2]) / K[0,0]
             y0 = (y0 - K[1,2]) / K[1,1]
@@ -63,16 +65,16 @@ class RigidPointOptimizer:
 
             valid_w = w0 > 0
 
-            phi0, grad, valid_d, index = self.sdf.tsdf(points)
+            phi0, grad, valid_d = self.sdf.tsdf(points)
 
             valid = (valid & valid_w & valid_d)
             # valid = (valid & valid_w)
-            phi0 = torch.where(valid, phi0, torch.Tensor([0.0]))
+            phi0 = torch.where(valid, phi0, torch.Tensor([0.0]).to(self.device))
             grad = grad * valid.unsqueeze(-1)
             
             E = torch.sum(phi0 * phi0)
 
-            grad_xi = torch.zeros(6, points.shape[0])
+            grad_xi = torch.zeros(6, points.shape[0]).to(self.device)
 
             grad_xi[:3, :] = grad.T
             grad_xi[-3:,:] = torch.cross(points.T, grad.T, dim=0)
@@ -94,7 +96,7 @@ class RigidPointOptimizer:
             #DEBUG:
             # print("---current xi: {0}\n".format(xi))
 
-            if(torch.linalg.norm(xi)< self.conv_threshold):
+            if(torch.linalg.norm(xi)< self.conv_threshold.to(self.device)):
                 print('------- convergence after {0} iterations'.format(iter))
                 return True
 

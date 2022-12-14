@@ -18,7 +18,7 @@ _first = 0
 _last = sys.maxsize
 
 class Tracker():
-    def __init__(self, **kwargs):
+    def __init__(self, device, **kwargs):
         torch.set_default_dtype(torch.float32)
         torch.set_num_threads(1)
 
@@ -27,6 +27,7 @@ class Tracker():
         # create folder to save results
         self.exps_folder_name = kwargs['results_dir']
         self.expname = kwargs['expname']
+        self.device = device
 
         utils.mkdir_ifnotexists(os.path.join('../',self.exps_folder_name))
         self.expdir = os.path.join(self.exps_folder_name, self.expname)
@@ -67,14 +68,15 @@ class Tracker():
         T.tic()
         self.normal_estimator = NormalEstimator.NormalEstimator(self.loader.K, **self.conf.get_config('model')['normal_estimator'])
         T.toc("initial normal estimator")
+        
         # parse argument for sdf
         truncate = self.conf.get_int('model.grad_sdf.T')
-        self.tSDF = VolGradSdf.VolumetricGradSdf(self.normal_estimator, **self.conf.get_config('model')['grad_sdf'])
+        self.tSDF = VolGradSdf.VolumetricGradSdf(self.normal_estimator, device=self.device,  **self.conf.get_config('model')['grad_sdf'])
         
         print("...initial grid size {0} ".format(self.tSDF.grid_dim))
         print("...initial voxel size is {0} ".format(self.tSDF.voxel_size))
 
-        self.pOpt = RigidOptimizer.RigidPointOptimizer(self.tSDF, torch.eye(4))
+        self.pOpt = RigidOptimizer.RigidPointOptimizer(self.tSDF, torch.eye(4), device=self.device)
 
         # self.tOpt.check_tsdf()
 
@@ -85,16 +87,20 @@ class Tracker():
 
 
 if __name__ == '__main__':
+
     parser = argparse.ArgumentParser()
 
     parser.add_argument('--results_dir', type=str, default='../results/', help="result save path.")
     parser.add_argument('--expname', type=str, help='dataset name', required=True)
     parser.add_argument('--conf', type=str, help='config file name.', required=True)
-
+    
     args = parser.parse_args()
 
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    print('running on {0}'.format(device))
 
-    tracker = Tracker(conf=args.conf,
+    tracker = Tracker(device=device,
+                        conf=args.conf,
                         expname=args.expname,
                         results_dir=args.results_dir)
     T = Timer()
@@ -151,12 +157,9 @@ if __name__ == '__main__':
     # save mesh
     # Note that the marching cube function works not as good as c++ one
     T.tic()
-    boundary = tracker.tSDF.get_boundary()
-    tracker.tSDF.export_mesh(boundary, tracker.expdir + "init_mesh.ply")
+    # boundary = tracker.tSDF.get_boundary()
+    tracker.tSDF.export_mesh(tracker.expdir + "init_mesh.ply")
     T.toc("save mesh")
 
-    # save gradient sdf (takes too long)
-    # T.tic()
-    # tracker.tSDF.export_gradient_sdf(tracker.expdir + "grad_sdf.txt")
-    # T.toc("save grad sdf")
+
 

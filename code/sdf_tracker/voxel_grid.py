@@ -16,10 +16,12 @@ class VoxelGrid:
     def __init__(
         self,
         grid_dim,
+        device,
         voxel_size=0.02,
         shift=torch.Tensor([[0.0, 0.0, 0.0]])
         ):
 
+        self.device = device
         self.grid_dim = grid_dim
         self.num_voxels = int(grid_dim[0]*grid_dim[1]*grid_dim[2])
         self.voxel_size = voxel_size
@@ -31,7 +33,7 @@ class VoxelGrid:
 
 
     def voxel2world(self, index):
-        return self.origin + self.voxel_size * index
+        return self.origin + (self.voxel_size * index).to(self.device)
 
     def world2voxelf(self, point):
         return (point - self.origin) / self.voxel_size
@@ -64,6 +66,6 @@ class VoxelGrid:
 
         index = torch.round(i) + torch.round(j) * self.grid_dim[0] + torch.round(k) * self.grid_dim[0]*self.grid_dim[1]
 
-        index = torch.where(invalid, torch.Tensor([-1]), index)
+        index = torch.where(invalid, torch.Tensor([-1]).to(self.device), index)
 
         return index.type(torch.int64)

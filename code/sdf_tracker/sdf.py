@@ -10,6 +10,7 @@ class Sdf(ABC):
     def __init__(
         self,
         T,
+        device,
         counter = 0,
         z_max = 3.5,
         z_min = 0.5
@@ -17,6 +18,8 @@ class Sdf(ABC):
 
         self.T = T
         self.inv_T = 1 / T
+        
+        self.device = device
 
         self.counter = counter
 
@@ -24,8 +27,8 @@ class Sdf(ABC):
         self.z_min = z_min
         
     def truncate(self, sdf):
-        sdf = torch.where(sdf>-self.T, sdf, torch.Tensor([-self.T]))
-        sdf = torch.where(sdf<self.T, sdf, torch.Tensor([self.T]))
+        sdf = torch.where(sdf>-self.T, sdf, torch.Tensor([-self.T]).to(self.device))
+        sdf = torch.where(sdf<self.T, sdf, torch.Tensor([self.T]).to(self.device))
         return sdf
 
     def weight(self, sdf):
@@ -33,7 +36,7 @@ class Sdf(ABC):
         epsilon = 0.5*self.T
 
         w = torch.where(sdf>=-self.T, 1.0+sdf*self.inv_T, w)
-        w = torch.where(sdf>=0, torch.Tensor([1.]), w)
+        w = torch.where(sdf>=0, torch.Tensor([1.]).to(self.device), w)
 
         # print("weight shape:", w.shape)
         
