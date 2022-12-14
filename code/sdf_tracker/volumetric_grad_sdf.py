@@ -48,8 +48,6 @@ class VolumetricGradSdf(VoxelGrid, Sdf):
         self.color = torch.zeros_like(self.grid_points).to(self.device)
         self.w = torch.zeros(self.num_voxels).to(self.device)
         
-        self.mean_curv = torch.zeros(self.num_voxels).to(self.device)
-        self.gaussian_curv = torch.zeros(self.num_voxels).to(self.device)
             
     # compute the new dist 
     def tsdf(self, points):
@@ -116,7 +114,6 @@ class VolumetricGradSdf(VoxelGrid, Sdf):
         med_depth = cv.medianBlur(depth, 5)
 
         Nest = self.Nest.compute(depth=med_depth)
-        mean_curv, gaussian_curv = self.curvature_estimator.compute(med_depth)
 
         grad = Nest['normal']
         n_sq_inv = Nest['n_sq_inv']
@@ -153,9 +150,6 @@ class VolumetricGradSdf(VoxelGrid, Sdf):
         normal = torch.from_numpy(grad[:,mm,nn]).type(torch.float32).to(self.device)
         n_sq_inv_points = torch.from_numpy(n_sq_inv[mm,nn]).to(self.device)
         
-        #curvature
-        H_curv = mean_curv[mm.to(self.device), nn.to(self.device)]
-        K_curv = gaussian_curv[mm.to(self.device), nn.to(self.device)]
 
         # normal norm smaller than 0.1 is invalide
         valid_n = torch.norm(normal, p=2, dim=0)>=0.1
@@ -177,9 +171,6 @@ class VolumetricGradSdf(VoxelGrid, Sdf):
         self.dist = torch.where(valid, self.dist + (sdf - self.dist) * w / self.w, self.dist)
         self.grad = torch.where(valid.unsqueeze(-1), self.grad- (R @ normal).T * w.unsqueeze(-1), self.grad)
         self.color = torch.where(valid.unsqueeze(-1), self.color + (color - self.color) * w.unsqueeze(-1) / self.w.unsqueeze(-1), self.color)
-        self.gaussian_curv = torch.where(valid, self.gaussian_curv + (K_curv - self.gaussian_curv) * w/ self.w, self.gaussian_curv)
-        self.mean_curv = torch.where(valid, self.mean_curv + (H_curv - self.mean_curv) * w / self.w, self.mean_curv)
-
         
         # #debug
         # if check_nan(self.grad):

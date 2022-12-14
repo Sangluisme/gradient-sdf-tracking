@@ -4,19 +4,19 @@ torch.set_default_dtype(torch.float64)
 import torch.nn.functional as F
 from third.camera_utils import rot_to_quat as Rot2Quat
 
-def skew(w):
-    return torch.Tensor([[0, -w[2], w[1]], [w[2], 0, -w[0]],[-w[1], w[0], 0]]).type(torch.float64)
 
 class SE3:
 
     dim = 4
     dof = 6
 
-    def __init__(self, mat):
+    def __init__(self, mat, device):
 
         assert mat.dim() == 2, "can only be 2D matrix"
         assert mat.size() == torch.Size([4, 4]), "can only be 4x4 torch tensor"
         # self.mat = mat
+        
+        self.device = device
         self.mat = mat
         self.rotation = mat[:3,:3]
         self.translation = mat[:3,3]
@@ -30,9 +30,13 @@ class SE3:
     def Quaternion(self):
         w = Rot2Quat(self.rotation)
         return torch.hstack([self.translation, w])
+    
+    def skew(self, w):
+        return torch.Tensor([[0, -w[2], w[1]], [w[2], 0, -w[0]],[-w[1], w[0], 0]]).type(torch.float64).to(self.device)
+
         
-    @staticmethod
-    def exp(Xi):
+    # @staticmethod
+    def exp(self, Xi):
 
         Xi = Xi.type(torch.float64)
         
@@ -40,7 +44,7 @@ class SE3:
         v = Xi[:3]
         w = Xi[-3:]
 
-        w_skew = skew(w)
+        w_skew = self.skew(w)
         norm_w = torch.norm(w, p=2).type(torch.float64)
         norm_w_inv = 1. / norm_w
 
@@ -53,9 +57,9 @@ class SE3:
             # B = (norm_w_inv * norm_w_inv * w_skew) * (1-torch.cos(norm_w))
             # C = (1 - torch.sin(norm_w) * norm_w_inv) * norm_w_inv * norm_w_inv * w_skew  @ w_skew.T
             # R = A + B + C
-            R = torch.eye(3) + norm_w_inv  * torch.sin(norm_w) * w_skew  + norm_w_inv * norm_w_inv * (1-torch.cos(norm_w)) * w_skew @ w_skew
+            R = torch.eye(3).to(self.device) + norm_w_inv  * torch.sin(norm_w) * w_skew  + norm_w_inv * norm_w_inv * (1-torch.cos(norm_w)) * w_skew @ w_skew
 
-            t = (torch.eye(3) + norm_w_inv * norm_w_inv * (1 - torch.cos(norm_w)) * w_skew + (norm_w - torch.sin(norm_w)) * norm_w_inv * norm_w_inv * norm_w_inv * w_skew @ w_skew) @ v
+            t = (torch.eye(3).to(self.device) + norm_w_inv * norm_w_inv * (1 - torch.cos(norm_w)) * w_skew + (norm_w - torch.sin(norm_w)) * norm_w_inv * norm_w_inv * norm_w_inv * w_skew @ w_skew) @ v
 
         
         T = torch.eye(4)

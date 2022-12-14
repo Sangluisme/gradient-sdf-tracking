@@ -1,0 +1,7 @@
+.vscode/*
+.vscode
+results/*
+code/__pycache__/*
+code/main/__pycache__/*
+code/third/__pycache__/*
+code/sdf_tracker/__pycache__/*

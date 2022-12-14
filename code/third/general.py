@@ -2,7 +2,6 @@ import os
 from glob import glob
 import torch
 import numpy as np
-import pandas as pd
 from skimage import measure
 # import trimesh
 
@@ -48,14 +47,7 @@ def initial_grid(grid_dim):
     grid_points = torch.tensor(np.vstack([xx.flatten('F'), yy.flatten('F'), zz.flatten('F')]).T, dtype=torch.float)
     return xx, yy, zz, grid_points
 
-# this can not export normal of point cloud
-# def export_cloud(points, colors, filename):
-#     cloud = PyntCloud(pd.DataFrame(
-#     # same arguments that you are passing to visualize_pcl
-#     data=np.hstack((points, colors)),
-#     columns=["x", "y", "z", "red", "green", "blue"]))
 
-#     cloud.to_file(filename)
 
 
 def export_mesh(sdf, filename):
