@@ -78,9 +78,9 @@ Python Version:
 - no PS refinement part (unfortunately I will not add this part)
 
 TODO:
-- will add cuda version
-- will improve the mesh generating
-- if you know some official python package for SO3 and SE3 calculation, please let me know :P
+- [x] will add cuda version
+- [x] will improve the mesh generating
+- [ ] if you know some official python package for SO3 and SE3 calculation, please let me know :P
 
 ### Citation
 If you find our work useful in your research, please consider citing:
